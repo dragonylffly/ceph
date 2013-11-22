@@ -179,7 +179,7 @@ public:
       return;
     }
 
-    if (true) {
+    if (features & CEPH_FEATURE_EXPORT_PEER) {
       if (head.op == CEPH_CAP_OP_EXPORT || head.op == CEPH_CAP_OP_IMPORT)
 	::encode(peer, payload);
     } else {
