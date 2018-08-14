@@ -879,6 +879,9 @@ if(WITH_FUSE)
 endif()
 install(TARGETS ceph-osd DESTINATION bin)
 
+add_executable(fs fs.cc)
+target_link_libraries(fs os global)
+
 add_subdirectory(mds)
 set(ceph_mds_srcs
   ceph_mds.cc)

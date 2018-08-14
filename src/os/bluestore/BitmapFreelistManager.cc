@@ -507,6 +507,7 @@ void BitmapFreelistManager::allocate(
 {
   dout(10) << __func__ << " 0x" << std::hex << offset << "~" << length
 	   << std::dec << dendl;
+  dout(0) << " 123 " << __func__ << " offset: " << offset << " length: " << length << dendl;
   if (cct->_conf->bluestore_debug_freelist)
     _verify_range(offset, length, 0);
   _xor(offset, length, txn);

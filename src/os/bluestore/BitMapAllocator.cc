@@ -113,6 +113,7 @@ int64_t BitMapAllocator::allocate(
   uint64_t want_size, uint64_t alloc_unit, uint64_t max_alloc_size,
   int64_t hint, mempool::bluestore_alloc::vector<AllocExtent> *extents)
 {
+  int64_t ret;
 
   assert(!(alloc_unit % m_block_size));
   assert(alloc_unit);
@@ -125,8 +126,11 @@ int64_t BitMapAllocator::allocate(
      << " hint " << hint
      << dendl;
   hint = hint % m_total_size; // make hint error-tolerant
-  return allocate_dis(want_size, alloc_unit / m_block_size,
+  ret = allocate_dis(want_size, alloc_unit / m_block_size,
                       max_alloc_size, hint / m_block_size, extents);
+  dout(0) << " 123 " << __FILE__ << ": " <<  __FUNCTION__ << " want_size: " << want_size << " alloc_unit: " << alloc_unit
+          << " block_size: " << m_block_size << " allocated_size: " << ret << dendl;
+  return ret;
 }
 
 int64_t BitMapAllocator::allocate_dis(

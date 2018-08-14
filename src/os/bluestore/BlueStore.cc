@@ -10042,6 +10042,8 @@ int BlueStore::_do_alloc_write(
     0, &prealloc);
   assert(prealloc_left == (int64_t)need);
   dout(20) << __func__ << " prealloc " << prealloc << dendl;
+  alloc->dump();
+  dout(0) << __func__ << " position: " << prealloc << dendl;
   auto prealloc_pos = prealloc.begin();
 
   for (auto& wi : wctx->writes) {

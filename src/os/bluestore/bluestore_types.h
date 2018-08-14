@@ -85,7 +85,8 @@ public:
 };
 
 inline static ostream& operator<<(ostream& out, const AllocExtent& e) {
-  return out << "0x" << std::hex << e.offset << "~" << e.length << std::dec;
+  //return out << "0x" << std::hex << e.offset << "~" << e.length << std::dec;
+  return out << " 123 " << " offset: " << e.offset << " length: " << e.length;
 }
 
 class ExtentList {

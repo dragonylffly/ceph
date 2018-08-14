@@ -231,7 +231,7 @@ BmapEntry::find_first_set_bits(int64_t required_blocks,
 
 void BmapEntry::dump_state(CephContext* const cct, const int& count)
 {
-  dout(0) << count << ":: 0x" << std::hex << m_bits << std::dec << dendl;
+  dout(0) << count << " 123 " << ":: 0x" << std::hex << m_bits << std::dec << dendl;
 }
 
 /*
@@ -922,6 +922,8 @@ void BitMapAreaIN::dump_state(CephContext* const cct, int& count)
 
   while ((child = static_cast<BitMapArea *>(iter.next()))) {
     child->dump_state(cct, count);
+    if (count)
+      break;
   }
 }
 
