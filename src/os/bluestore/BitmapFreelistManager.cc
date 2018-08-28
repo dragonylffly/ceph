@@ -198,6 +198,8 @@ int BitmapFreelistManager::init(uint64_t dev_size)
       }
     }
   }
+    cout << "size: " << size << "blocks: " << blocks << " bytes_per_block: " << bytes_per_block
+        << " blocks_per_key: " << blocks_per_key << std::endl;
   return 0;
 }
 
@@ -279,6 +281,9 @@ bool BitmapFreelistManager::enumerate_next(uint64_t *offset, uint64_t *length)
     const char *p = k.c_str();
     _key_decode_u64(p, &enumerate_offset);
     enumerate_bl = enumerate_p->value();
+    cout << " 0x" << std::hex << enumerate_offset << std::dec << ": ";
+    enumerate_bl.hexdump(cout, false);
+    cout << std::endl;
     assert(enumerate_offset == 0);
     assert(get_next_set_bit(enumerate_bl, 0) == 0);
   }
@@ -532,11 +537,12 @@ void BitmapFreelistManager::_xor(
   assert((offset & block_mask) == offset);
   assert((length & block_mask) == length);
 
+  static int first = 1;
   uint64_t first_key = offset & key_mask;
   uint64_t last_key = (offset + length - 1) & key_mask;
   dout(20) << __func__ << " first_key 0x" << std::hex << first_key
 	   << " last_key 0x" << last_key << std::dec << dendl;
-
+  cout << "first_key: " << first_key << " last_key: " << last_key << std::endl;    
   if (first_key == last_key) {
     bufferptr p(blocks_per_key >> 3);
     p.zero();
@@ -552,7 +558,17 @@ void BitmapFreelistManager::_xor(
     dout(30) << __func__ << " 0x" << std::hex << first_key << std::dec << ": ";
     bl.hexdump(*_dout, false);
     *_dout << dendl;
-    txn->merge(bitmap_prefix, k, bl);
+    cout << " 0x" << std::hex << first_key << std::dec << ": ";
+    bl.hexdump(cout, false);
+    cout << std::endl;
+    if (first) {
+        cout << "will set " << bitmap_prefix << k << std::endl;    
+        txn->set(bitmap_prefix, k, bl);
+        first = 0;
+    } else {
+        cout << "will merge " << bitmap_prefix << k << std::endl;    
+        txn->merge(bitmap_prefix, k, bl);
+    }
   } else {
     // first key
     {
