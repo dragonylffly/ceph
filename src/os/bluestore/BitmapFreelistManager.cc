@@ -537,7 +537,6 @@ void BitmapFreelistManager::_xor(
   assert((offset & block_mask) == offset);
   assert((length & block_mask) == length);
 
-  static int first = 1;
   uint64_t first_key = offset & key_mask;
   uint64_t last_key = (offset + length - 1) & key_mask;
   dout(20) << __func__ << " first_key 0x" << std::hex << first_key
@@ -561,14 +560,8 @@ void BitmapFreelistManager::_xor(
     cout << " 0x" << std::hex << first_key << std::dec << ": ";
     bl.hexdump(cout, false);
     cout << std::endl;
-    if (first) {
-        cout << "will set " << bitmap_prefix << k << std::endl;    
-        txn->set(bitmap_prefix, k, bl);
-        first = 0;
-    } else {
-        cout << "will merge " << bitmap_prefix << k << std::endl;    
-        txn->merge(bitmap_prefix, k, bl);
-    }
+    cout << "will merge " << bitmap_prefix << k << std::endl;    
+    txn->merge(bitmap_prefix, k, bl);
   } else {
     // first key
     {

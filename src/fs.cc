@@ -51,22 +51,66 @@ const string PREFIX_OMAP = "M";    // u64 + keyname -> value
 const string PREFIX_DEFERRED = "L";  // id -> deferred_transaction_t
 const string PREFIX_ALLOC = "B";   // u64 offset -> u64 length (freelist)
 const string PREFIX_SHARED_BLOB = "X"; // u64 offset -> shared_blob_t
+const string PREFIX_METADATA = "BLOBMD";
+
+typedef struct {
+    std::string name;
+    uint64_t size;
+    AllocExtentVector extents;
+} FileMetadata;
+
+KeyValueDB* init_db();
+KeyValueDB* create_db();
+FreelistManager *create_fm(KeyValueDB *db);
+Allocator *init_allocator(FreelistManager *fm);
+FreelistManager *init_fm(KeyValueDB *db);
+void close_allocator(Allocator *alloc);
+void close_fm(FreelistManager *fm);
+void close_db(KeyValueDB *db);
+
+class MetadataService {
+public:
+    Allocator *alloc;
+    KeyValueDB *db;
+    FreelistManager *fm;
+
+    void create()
+    {
+        db = create_db();
+        fm = create_fm(db);
+        alloc = init_allocator(fm);
+    }
+
+    void init()
+    {
+        db = init_db();
+        fm = init_fm(db);
+        alloc = init_allocator(fm);
+    }
+
+    void close()
+    {
+        close_allocator(alloc);
+        close_fm(fm);
+        close_db(db);
+    }
+};
 
 
-void show_extents(int num, AllocExtentVector & extents)
+void show_metadata(FileMetadata &meta)
 {
-    for (auto& p : extents) {
-        cout << "file " << num << " extent: [ offset: " << p.offset << ", length: " << p.length << " ]" << std::endl;
+    for (auto& p : meta.extents) {
+        cout << "file: " << meta.name << " extent: [ offset: " << p.offset << ", length: " << p.length << " ]" << std::endl;
     }
 }
 
-int allocate_space(uint64_t size, uint64_t min_alloc_size, Allocator *alloc, AllocExtentVector *extents)
+int allocate_space(MetadataService &mds, FileMetadata &meta, uint64_t min_alloc_size = ALLOCATE_UNIT)
 {
-    if (alloc->reserve(size) < 0) {
+    if (mds.alloc->reserve(meta.size) < 0) {
         cout << "reserve error" << std::endl;
         return -1;
     }
-    if (alloc->allocate(size, min_alloc_size, size, 0, extents) != (int64_t)size) {
+    if (mds.alloc->allocate(meta.size, min_alloc_size, meta.size, 0, &meta.extents) != (int64_t)meta.size) {
       cout << "allocate error" << std::endl;
       return -1;
     }
@@ -95,6 +139,37 @@ int save_space(KeyValueDB *db, const char *prefix, const char *key, AllocExtentV
     return ret;
 }
 
+int save_metadata(MetadataService &mds, FileMetadata &meta)
+{
+    KeyValueDB::Transaction t = mds.db->get_transaction();
+    bufferlist value;
+    ::encode(meta.size, value);
+    ::encode(meta.extents.size(), value);
+    for (auto& p : meta.extents) {
+        ::encode(p.offset, value);
+        ::encode(p.length, value);
+        mds.fm->allocate(p.offset, p.length, t);
+    }
+    t->set(PREFIX_METADATA, meta.name, value);
+    int ret = mds.db->submit_transaction_sync(t);
+    value.clear();
+    
+    return ret;
+}
+
+int delete_metadata(MetadataService &mds, FileMetadata &meta)
+{
+    KeyValueDB::Transaction t = mds.db->get_transaction();
+    t->rmkey(PREFIX_METADATA, meta.name);
+    for (auto& p : meta.extents) {
+        mds.alloc->release(p.offset, p.length);
+        mds.fm->release(p.offset, p.length, t);
+    }
+    int ret = mds.db->submit_transaction_sync(t);
+       
+    return ret;
+}
+
 int load_space(KeyValueDB *db, const char *prefix, const char *key, AllocExtentVector &extents)
 {
     bufferlist value;
@@ -118,6 +193,32 @@ int load_space(KeyValueDB *db, const char *prefix, const char *key, AllocExtentV
     }
     return 0;
 }
+
+int load_metadata(MetadataService     &mds, FileMetadata &meta)
+{
+    bufferlist value;
+    int ret = mds.db->get(PREFIX_METADATA, meta.name, &value);
+    if (ret) {
+        cout << "get error" << std::endl;
+        return ret;
+    }
+    AllocExtent extent;
+    size_t len;
+    bufferlist::iterator p = value.begin();
+    ::decode(meta.size, p);
+    ::decode(len, p);
+    if (len == 0) {
+        cout << "get error" << std::endl;
+        return -1;
+    }
+    for (size_t m = 0; m < len; m++) {
+        ::decode(extent.offset, p);
+        ::decode(extent.length, p);
+        meta.extents.push_back(extent);
+    }
+    return 0;
+}
+
 
 struct _Int64ArrayMergeOperator : public KeyValueDB::MergeOperator {
   void merge_nonexistent(
@@ -314,55 +415,47 @@ int main(int argc, const char *argv[])
         CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY_NODOUT, 0);
     common_init_finish(g_ceph_context);
 
-    Allocator *alloc;
-    KeyValueDB *db;
-    FreelistManager *fm;
+    MetadataService mds;
 
     if (argc == 2 && !strcmp(argv[1], "create")) {
-        db = create_db();
-        fm = create_fm(db);
-        close_fm(fm);
-        close_db(db);
+        mds.create();
+        mds.close();
         cout << "success" << std::endl;
         test_fm();
         return 0;
     }
-    db = init_db();
-    fm = init_fm(db);
-    alloc = init_allocator(fm);
-    /*
-    close_allocator(alloc);
-    close_fm(fm);
-    close_db(db);
-    return 0;
-    alloc = Allocator::create(g_ceph_context, g_ceph_context->_conf->bluestore_allocator, (int64_t)total, (int64_t)min_alloc_size);
-    if (!alloc) {
-        cout << "allocator error" << std::endl;
-        return -1;
-    }
-    alloc->init_add_free(0, total);*/
-    cout << "free space: " << alloc->get_free() << std::endl;
-    AllocExtentVector preallocate1, preallocate2, preallocate3;
-    uint64_t need = 2*MB;
-    allocate_space(need, ALLOCATE_UNIT, alloc, &preallocate1);
-    show_extents(1, preallocate1);
-    cout << "free space: " << alloc->get_free() << std::endl;
-    allocate_space(need, ALLOCATE_UNIT, alloc, &preallocate2);
-    show_extents(2, preallocate2);
-    cout << "free space: " << alloc->get_free() << std::endl;
-    free_space(alloc, preallocate1);
-    need = 4*MB;
-    allocate_space(need, ALLOCATE_UNIT, alloc, &preallocate3);
-    show_extents(3, preallocate3);
-    //alloc->shutdown();
-    //db = create_db();
-    save_space(db, "space", "f3", preallocate3);
-    preallocate3.clear();
-    load_space(db, "space", "f3", preallocate3);
-    show_extents(3, preallocate3);
-    close_allocator(alloc);
-    close_fm(fm);
-    close_db(db);
+    mds.init();
+    cout << "free space: " << mds.alloc->get_free() << std::endl;
+    FileMetadata meta;
+    meta.name = "f1";
+    meta.size = 2*MB;
+    allocate_space(mds, meta);
+    save_metadata(mds, meta);
+    cout << "free space: " << mds.alloc->get_free() << std::endl;
+    meta.name = "f2";
+    meta.extents.clear();
+    allocate_space(mds, meta);
+    save_metadata(mds, meta);
+    cout << "free space: " << mds.alloc->get_free() << std::endl;
+    meta.name = "f1";
+    meta.extents.clear();
+    load_metadata(mds, meta);
+    delete_metadata(mds, meta);
+    cout << "free space: " << mds.alloc->get_free() << std::endl;
+    meta.name = "f3";
+    meta.size = 4*MB;
+    meta.extents.clear();
+    allocate_space(mds, meta);
+    save_metadata(mds, meta);
+    cout << "free space: " << mds.alloc->get_free() << std::endl;
+    mds.close();
+    meta.size = 0;
+    meta.extents.clear();
+    mds.init();
+    load_metadata(mds, meta);
+    cout << "size: " << meta.size << std::endl;
+    show_metadata(meta);
+    mds.close();
     
     cout << "success" << std::endl;
 
