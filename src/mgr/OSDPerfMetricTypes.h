@@ -7,6 +7,7 @@
 #include "include/denc.h"
 #include "include/stringify.h"
 
+#include <memory>
 #include <regex>
 
 typedef std::vector<std::string> OSDPerfMetricSubKey; // array of regex match
@@ -131,7 +132,7 @@ struct denc_traits<OSDPerfMetricKeyDescriptor> {
 };
 
 typedef std::pair<uint64_t,uint64_t> PerformanceCounter;
-typedef std::vector<PerformanceCounter> PerformanceCounters;
+typedef std::vector<PerformanceCounter, std::allocator<std::pair<uint64_t, uint64_t> > > PerformanceCounters;
 
 typedef uint8_t PerformanceCounterType;
 
@@ -193,13 +194,55 @@ struct PerformanceCounterDescriptor {
     DENC_FINISH(p);
   }
 
-  void pack_counter(const PerformanceCounter &c, ceph::buffer::list *bl) const;
+  void pack_counter(const PerformanceCounter &c, ceph::buffer::list *bl) const {
+    ::encode(c.first, *bl);
+    switch(type) {
+      case OSDPerfMetric::OPS:
+      case OSDPerfMetric::WRITE_OPS:
+      case OSDPerfMetric::READ_OPS:
+      case OSDPerfMetric::BYTES:
+      case OSDPerfMetric::WRITE_BYTES:
+      case OSDPerfMetric::READ_BYTES:
+        break;
+      case OSDPerfMetric::LATENCY:
+      case OSDPerfMetric::WRITE_LATENCY:
+      case OSDPerfMetric::READ_LATENCY:
+        ::encode(c.second, *bl);
+        break;
+      default:
+        ceph_abort();
+    }
+  }
+
   //void unpack_counter(ceph::buffer::list::const_iterator& bl,
   void unpack_counter(ceph::buffer::list::iterator& bl,
                       //PerformanceCounter *c) const;
                       PerformanceCounter *c);
 };
 WRITE_CLASS_DENC(PerformanceCounterDescriptor)
+
+/*
+void PerformanceCounterDescriptor::pack_counter(const PerformanceCounter &c,
+                                                bufferlist *bl) const {
+  //using ceph::encode;
+  ::encode(c.first, *bl);
+  switch(type) {
+  case OSDPerfMetric::OPS:
+  case OSDPerfMetric::WRITE_OPS:
+  case OSDPerfMetric::READ_OPS:
+  case OSDPerfMetric::BYTES:
+  case OSDPerfMetric::WRITE_BYTES:
+  case OSDPerfMetric::READ_BYTES:
+    break;
+  case OSDPerfMetric::LATENCY:
+  case OSDPerfMetric::WRITE_LATENCY:
+  case OSDPerfMetric::READ_LATENCY:
+    ::encode(c.second, *bl);
+    break;
+  default:
+    ceph_abort();
+  }
+}*/
 
 std::ostream& operator<<(std::ostream& os,
                          const PerformanceCounterDescriptor &d);
@@ -339,12 +382,36 @@ struct OSDPerfMetricQuery {
     }
   }
 
-  void pack_counters(const PerformanceCounters &counters, ceph::buffer::list *bl) const;
+  void pack_counters(const PerformanceCounters &counters, ceph::buffer::list *bl) const {
+    auto it = counters.begin();
+      for (auto &descriptor : performance_counter_descriptors) {
+      if (it == counters.end()) {
+        descriptor.pack_counter(PerformanceCounter(), bl);
+      } else {
+        descriptor.pack_counter(*it, bl);
+        it++;
+      }
+    }
+  }
 
   OSDPerfMetricKeyDescriptor key_descriptor;
   PerformanceCounterDescriptors performance_counter_descriptors;
 };
 WRITE_CLASS_DENC(OSDPerfMetricQuery)
+
+/*
+void OSDPerfMetricQuery::pack_counters(const PerformanceCounters &counters,
+                                       bufferlist *bl) const {
+  auto it = counters.begin();
+  for (auto &descriptor : performance_counter_descriptors) {
+    if (it == counters.end()) {
+      descriptor.pack_counter(PerformanceCounter(), bl);
+    } else {
+      descriptor.pack_counter(*it, bl);
+      it++;
+    }
+  }
+}*/
 
 std::ostream& operator<<(std::ostream& os, const OSDPerfMetricQuery &query);
 

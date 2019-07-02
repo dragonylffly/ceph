@@ -1955,6 +1955,8 @@ protected:
 
   PGPool _get_pool(int id, OSDMapRef createmap);
 
+  void _get_pgs(vector<PGRef> *v, bool clear_too=false);
+
   PG   *_lookup_lock_pg_with_map_lock_held(spg_t pgid);
   PG   *_lookup_lock_pg(spg_t pgid);
 
@@ -2451,6 +2453,16 @@ public:
 public:
   OSDService service;
   friend class OSDService;
+
+private:
+  void set_perf_queries(
+      const std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> &queries);
+  void get_perf_reports(
+      std::map<OSDPerfMetricQuery, OSDPerfMetricReport> *reports);
+
+  Mutex m_perf_queries_lock = {"OSD::m_perf_queries_lock"};
+  std::list<OSDPerfMetricQuery> m_perf_queries;
+  std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> m_perf_limits;
 };
 
 

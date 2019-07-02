@@ -26,8 +26,10 @@
 
 #include "DaemonState.h"
 #include "ClusterState.h"
+#include "OSDPerfMetricTypes.h"
 
 class health_check_map_t;
+class DaemonServer;
 
 typedef std::map<std::string, std::string> PyModuleConfig;
 
@@ -43,6 +45,7 @@ class ActivePyModules
   Objecter &objecter;
   Client   &client;
   Finisher &finisher;
+  DaemonServer &server;
 
 
   mutable Mutex lock{"ActivePyModules::lock"};
@@ -51,7 +54,7 @@ public:
   ActivePyModules(PyModuleConfig const &config_,
             DaemonStateIndex &ds, ClusterState &cs, MonClient &mc,
             LogChannelRef clog_, Objecter &objecter_, Client &client_,
-            Finisher &f);
+            Finisher &f, DaemonServer &server);
 
   ~ActivePyModules();
 
@@ -76,6 +79,12 @@ public:
      const std::string &svc_id);
   PyObject *get_context();
   PyObject *get_osdmap();
+
+  OSDPerfMetricQueryID add_osd_perf_query(
+      const OSDPerfMetricQuery &query,
+      const boost::optional<OSDPerfMetricLimit> &limit);
+  void remove_osd_perf_query(OSDPerfMetricQueryID query_id);
+  PyObject *get_osd_perf_counters(OSDPerfMetricQueryID query_id);
 
   bool get_config(const std::string &module_name,
       const std::string &key, std::string *val) const;

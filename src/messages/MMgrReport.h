@@ -18,6 +18,7 @@
 #include <boost/optional.hpp>
 
 #include "msg/Message.h"
+#include "mgr/OSDPerfMetricTypes.h"
 
 #include "common/perf_counters.h"
 
@@ -66,7 +67,7 @@ WRITE_CLASS_ENCODER(PerfCounterType)
 
 class MMgrReport : public Message
 {
-  static const int HEAD_VERSION = 4;
+  static const int HEAD_VERSION = 5;
   static const int COMPAT_VERSION = 1;
 
 public:
@@ -92,6 +93,8 @@ public:
   // for service registration
   boost::optional<std::map<std::string,std::string>> daemon_status;
 
+  std::map<OSDPerfMetricQuery, OSDPerfMetricReport>  osd_perf_metric_reports;
+
   void decode_payload() override
   {
     bufferlist::iterator p = payload.begin();
@@ -104,6 +107,9 @@ public:
       ::decode(service_name, p);
       ::decode(daemon_status, p);
     }
+    if (header.version >= 5) {
+      decode(osd_perf_metric_reports, p);
+    }
   }
 
   void encode_payload(uint64_t features) override {
@@ -113,6 +119,7 @@ public:
     ::encode(undeclare_types, payload);
     ::encode(service_name, payload);
     ::encode(daemon_status, payload);
+    ::encode(osd_perf_metric_reports, payload);
   }
 
   const char *get_type_name() const override { return "mgrreport"; }

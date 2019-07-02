@@ -29,6 +29,7 @@
 #include "PyModuleRegistry.h"
 
 #include "ActivePyModules.h"
+#include "DaemonServer.h"
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mgr
@@ -39,10 +40,10 @@
 ActivePyModules::ActivePyModules(PyModuleConfig const &config_,
           DaemonStateIndex &ds, ClusterState &cs,
 	  MonClient &mc, LogChannelRef clog_, Objecter &objecter_,
-          Client &client_, Finisher &f)
+          Client &client_, Finisher &f, DaemonServer &server)
   : config_cache(config_), daemon_state(ds), cluster_state(cs),
     monc(mc), clog(clog_), objecter(objecter_), client(client_), finisher(f),
-    lock("ActivePyModules")
+    server(server), lock("ActivePyModules")
 {}
 
 ActivePyModules::~ActivePyModules() = default;
@@ -735,3 +736,60 @@ void ActivePyModules::set_uri(const std::string& module_name,
   modules[module_name]->set_uri(uri);
 }
 
+OSDPerfMetricQueryID ActivePyModules::add_osd_perf_query(
+    const OSDPerfMetricQuery &query,
+    const boost::optional<OSDPerfMetricLimit> &limit)
+{
+  return server.add_osd_perf_query(query, limit);
+}
+
+void ActivePyModules::remove_osd_perf_query(OSDPerfMetricQueryID query_id)
+{
+  int r = server.remove_osd_perf_query(query_id);
+  if (r < 0) {
+    dout(0) << "remove_osd_perf_query for query_id=" << query_id << " failed: "
+            << cpp_strerror(r) << dendl;
+  }
+}
+
+PyObject *ActivePyModules::get_osd_perf_counters(OSDPerfMetricQueryID query_id)
+{
+  std::map<OSDPerfMetricKey, PerformanceCounters> counters;
+
+  int r = server.get_osd_perf_counters(query_id, &counters);
+  if (r < 0) {
+    dout(0) << "get_osd_perf_counters for query_id=" << query_id << " failed: "
+            << cpp_strerror(r) << dendl;
+    Py_RETURN_NONE;
+  }
+
+  PyFormatter f;
+
+  f.open_array_section("counters");
+  for (auto &it : counters) {
+    auto &key = it.first;
+    auto  &instance_counters = it.second;
+    f.open_object_section("i");
+    f.open_array_section("k");
+    for (auto &sub_key : key) {
+      f.open_array_section("s");
+      for (size_t i = 0; i < sub_key.size(); i++) {
+        f.dump_string(stringify(i).c_str(), sub_key[i]);
+      }
+      f.close_section(); // s
+    }
+    f.close_section(); // k
+    f.open_array_section("c");
+    for (auto &c : instance_counters) {
+      f.open_array_section("p");
+      f.dump_unsigned("0", c.first);
+      f.dump_unsigned("1", c.second);
+      f.close_section(); // p
+    }
+    f.close_section(); // c
+    f.close_section(); // i
+  }
+  f.close_section(); // counters
+
+  return f.get();
+}

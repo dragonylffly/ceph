@@ -2606,7 +2606,13 @@ int OSD::init()
 
       return m;
   });
-
+  mgrc.set_perf_metric_query_cb(
+    [this](const std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> &queries) {
+        set_perf_queries(queries);
+      },
+      [this](std::map<OSDPerfMetricQuery, OSDPerfMetricReport> *reports) {
+        get_perf_reports(reports);
+      });
   mgrc.init();
   client_messenger->add_dispatcher_head(&mgrc);
 
@@ -3728,6 +3734,37 @@ PGPool OSD::_get_pool(int id, OSDMapRef createmap)
 
   dout(10) << "_get_pool " << p.id << dendl;
   return p;
+}
+
+void OSD::_get_pgs(vector<PGRef> *v, bool clear_too)
+{
+  v->clear();
+  v->reserve(get_num_pgs());
+  /*
+  for (auto& s : shards) {
+    std::lock_guard l(s->shard_lock);
+    for (auto& j : s->pg_slots) {
+      if (j.second->pg &&
+	  !j.second->pg->is_deleted()) {
+	v->push_back(j.second->pg);
+	if (clear_too) {
+	  s->_detach_pg(j.second.get());
+	}
+      }
+    }
+  }*/
+  {
+    RWLock::RLocker l(pg_map_lock);
+    for (ceph::unordered_map<spg_t, PG*>::iterator p = pg_map.begin();
+        p != pg_map.end();
+        ++p) {
+      //if (p->second &&
+      //    !p->second->deleting) {
+      if (p->second) {
+        v->push_back(p->second);
+      }
+    }
+  }
 }
 
 PG *OSD::_open_lock_pg(
@@ -10145,6 +10182,62 @@ int OSD::init_op_flags(OpRequestRef& op)
 
   return 0;
 }
+
+void OSD::set_perf_queries(
+    const std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> &queries) {
+  dout(10) << "setting " << queries.size() << " queries" << dendl;
+
+  std::list<OSDPerfMetricQuery> supported_queries;
+  for (auto &it : queries) {
+    auto &query = it.first;
+    if (!query.key_descriptor.empty()) {
+      supported_queries.push_back(query);
+    }
+  }
+  if (supported_queries.size() < queries.size()) {
+    dout(1) << queries.size() - supported_queries.size()
+            << " unsupported queries" << dendl;
+  }
+
+  {
+    Mutex::Locker locker(m_perf_queries_lock);
+    m_perf_queries = supported_queries;
+    m_perf_limits = queries;
+  }
+
+  std::vector<PGRef> pgs;
+  _get_pgs(&pgs);
+  for (auto& pg : pgs) {
+    if (pg->is_primary()) {
+      pg->lock();
+      pg->set_dynamic_perf_stats_queries(supported_queries);
+      pg->unlock();
+    }
+  }
+}
+
+void OSD::get_perf_reports(
+    std::map<OSDPerfMetricQuery, OSDPerfMetricReport> *reports) {
+  std::vector<PGRef> pgs;
+  _get_pgs(&pgs);
+  DynamicPerfStats dps;
+  for (auto& pg : pgs) {
+    if (pg->is_primary()) {
+      // m_perf_queries can be modified only in set_perf_queries by mgr client
+      // request, and it is protected by by mgr client's lock, which is held
+      // when set_perf_queries/get_perf_reports are called, so we may not hold
+      // m_perf_queries_lock here.
+      DynamicPerfStats pg_dps(m_perf_queries);
+      pg->lock();
+      pg->get_dynamic_perf_stats(&pg_dps);
+      pg->unlock();
+      dps.merge(pg_dps);
+    }
+  }
+  dps.add_to_reports(m_perf_limits, reports);
+  dout(20) << "reports for " << reports->size() << " queries" << dendl;
+}
+
 
 void OSD::PeeringWQ::_dequeue(list<PG*> *out) {
   for (list<PG*>::iterator i = peering_queue.begin();

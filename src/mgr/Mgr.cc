@@ -233,7 +233,7 @@ void Mgr::init()
   // assume finisher already initialized in background_init
   dout(4) << "starting python modules..." << dendl;
   py_module_registry->active_start(loaded_config, daemon_state, cluster_state, *monc,
-      clog, *objecter, *client, finisher);
+      clog, *objecter, *client, finisher, server);
 
   dout(4) << "Complete." << dendl;
   initializing = false;

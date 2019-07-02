@@ -43,6 +43,7 @@
 #include "messages/MOSDPGLog.h"
 #include "include/str_list.h"
 #include "PGBackend.h"
+#include "mgr/OSDPerfMetricTypes.h"
 
 #include <atomic>
 #include <list>
@@ -69,6 +70,7 @@ struct OpRequest;
 typedef OpRequest::Ref OpRequestRef;
 class MOSDPGLog;
 class CephContext;
+class DynamicPerfStats;
 
 namespace Scrub {
   class Store;
@@ -2579,6 +2581,12 @@ public:
   virtual void agent_delay() = 0;
   virtual void agent_clear() = 0;
   virtual void agent_choose_mode_restart() = 0;
+
+  virtual void set_dynamic_perf_stats_queries(
+    const std::list<OSDPerfMetricQuery> &queries) {
+  }
+  virtual void get_dynamic_perf_stats(DynamicPerfStats *stats) {
+  }
 };
 
 ostream& operator<<(ostream& out, const PG& pg);

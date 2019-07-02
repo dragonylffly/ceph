@@ -31,12 +31,14 @@
 #include "MgrSession.h"
 #include "DaemonState.h"
 
+#include "OSDPerfMetricCollector.h"
+
 class MMgrReport;
 class MMgrOpen;
 class MMonMgrReport;
 class MCommand;
 struct MonCommand;
-
+struct OSDPerfMetricQuery;
 
 /**
  * Server used in ceph-mgr to communicate with Ceph daemons like
@@ -98,6 +100,21 @@ private:
   std::atomic<bool> pgmap_ready;
   std::set<int32_t> reported_osds;
   void maybe_ready(int32_t osd_id);
+  class OSDPerfMetricCollectorListener :
+      public OSDPerfMetricCollector::Listener {
+  public:
+    OSDPerfMetricCollectorListener(DaemonServer *server)
+      : server(server) {
+    }
+    void handle_query_updated() override {
+      server->handle_osd_perf_metric_query_updated();
+    }
+  private:
+    DaemonServer *server;
+  };
+  OSDPerfMetricCollectorListener osd_perf_metric_collector_listener;
+  OSDPerfMetricCollector osd_perf_metric_collector;
+  void handle_osd_perf_metric_query_updated();
 
 public:
   int init(uint64_t gid, entity_addr_t client_addr);
@@ -135,6 +152,13 @@ public:
   void got_service_map();
 
   void _send_configure(ConnectionRef c);
+
+  OSDPerfMetricQueryID add_osd_perf_query(
+      const OSDPerfMetricQuery &query,
+      const boost::optional<OSDPerfMetricLimit> &limit);
+  int remove_osd_perf_query(OSDPerfMetricQueryID query_id);
+  int get_osd_perf_counters(OSDPerfMetricQueryID query_id,
+                            std::map<OSDPerfMetricKey, PerformanceCounters> *c);
 
   virtual const char** get_tracked_conf_keys() const override;
   virtual void handle_conf_change(const struct md_config_t *conf,

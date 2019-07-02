@@ -177,9 +177,6 @@ class MgrStandbyModule(ceph_module.BaseMgrStandbyModule):
     def get_config(self, key):
         return self._ceph_get_config(key)
 
-    def get_option(self, key):
-        return self._ceph_get_option(key)   
-
     def get_active_uri(self):
         return self._ceph_get_active_uri()
 
@@ -404,7 +401,7 @@ class MgrModule(ceph_module.BaseMgrModule):
         """
         return self._ceph_get_mgr_id()
 
-    def get_ceph_option(self, key):
+    def get_option(self, key):
         return self._ceph_get_option(key)
 
     def get_config(self, key, default=None):
@@ -565,3 +562,49 @@ class MgrModule(ceph_module.BaseMgrModule):
         :return: a string
         """
         return self._ceph_set_uri(uri)
+
+    def add_osd_perf_query(self, query):
+        """
+        Register an OSD perf query.  Argument is a
+        dict of the query parameters, in this form:
+
+        ::
+
+           {
+             'key_descriptor': [
+               {'type': subkey_type, 'regex': regex_pattern},
+               ...
+             ],
+             'performance_counter_descriptors': [
+               list, of, descriptor, types
+             ],
+             'limit': {'order_by': performance_counter_type, 'max_count': n},
+           }
+
+        Valid subkey types:
+           'client_id', 'client_address', 'pool_id', 'namespace', 'osd_id',
+           'pg_id', 'object_name', 'snap_id'
+        Valid performance counter types:
+           'ops', 'write_ops', 'read_ops', 'bytes', 'write_bytes', 'read_bytes',
+           'latency', 'write_latency', 'read_latency'
+
+        :param object query: query
+        :rtype: int (query id)
+        """
+        return self._ceph_add_osd_perf_query(query)
+
+    def remove_osd_perf_query(self, query_id):
+        """
+        Unregister an OSD perf query.
+
+        :param int query_id: query ID
+        """
+        return self._ceph_remove_osd_perf_query(query_id)
+
+    def get_osd_perf_counters(self, query_id):
+        """
+        Get stats collected for an OSD perf query.
+
+        :param int query_id: query ID
+        """
+        return self._ceph_get_osd_perf_counters(query_id)

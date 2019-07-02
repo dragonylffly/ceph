@@ -700,6 +700,8 @@ if (WITH_MGR)
       mgr/PyModuleRunner.cc
       mgr/PyFormatter.cc
       mgr/PyOSDMap.cc
+      mgr/OSDPerfMetricTypes.cc
+      mgr/OSDPerfMetricCollector.cc
       mgr/BaseMgrModule.cc
       mgr/BaseMgrStandbyModule.cc
       mgr/ActivePyModule.cc

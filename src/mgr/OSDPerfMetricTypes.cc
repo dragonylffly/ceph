@@ -38,6 +38,7 @@ std::ostream& operator<<(std::ostream& os,
   return os << "~/" << d.regex_str << "/";
 }
 
+/*
 void PerformanceCounterDescriptor::pack_counter(const PerformanceCounter &c,
                                                 bufferlist *bl) const {
   //using ceph::encode;
@@ -58,7 +59,7 @@ void PerformanceCounterDescriptor::pack_counter(const PerformanceCounter &c,
   default:
     ceph_abort();
   }
-}
+}*/
 
 void PerformanceCounterDescriptor::unpack_counter(
     //bufferlist::const_iterator& bl, PerformanceCounter *c) const {
@@ -114,8 +115,10 @@ std::ostream& operator<<(std::ostream& os, const OSDPerfMetricLimit &limit) {
             << limit.max_count << "}";
 }
 
+/*
 void OSDPerfMetricQuery::pack_counters(const PerformanceCounters &counters,
-                                       bufferlist *bl) const {
+//                                       bufferlist *bl) const {
+                                       ceph::buffer::list *bl) const {
   auto it = counters.begin();
   for (auto &descriptor : performance_counter_descriptors) {
     if (it == counters.end()) {
@@ -125,7 +128,7 @@ void OSDPerfMetricQuery::pack_counters(const PerformanceCounters &counters,
       it++;
     }
   }
-}
+}*/
 
 std::ostream& operator<<(std::ostream& os, const OSDPerfMetricQuery &query) {
   return os << "{key=" << query.key_descriptor << ", counters="

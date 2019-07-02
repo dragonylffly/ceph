@@ -18,6 +18,7 @@
 #include "json_spirit/json_spirit_writer.h"
 
 #include "mgr/mgr_commands.h"
+#include "mgr/OSDPerfMetricCollector.h"
 #include "mon/MonCommand.h"
 
 #include "messages/MMgrOpen.h"
@@ -74,7 +75,9 @@ DaemonServer::DaemonServer(MonClient *monc_,
                       g_conf->auth_cluster_required :
                       g_conf->auth_supported),
       lock("DaemonServer"),
-      pgmap_ready(false)
+      pgmap_ready(false),
+      osd_perf_metric_collector_listener(this),
+      osd_perf_metric_collector(osd_perf_metric_collector_listener)
 {
   g_conf->add_observer(this);
 }
@@ -310,6 +313,23 @@ void DaemonServer::maybe_ready(int32_t osd_id)
   }
 }
 
+void DaemonServer::handle_osd_perf_metric_query_updated()
+{
+  dout(10) << dendl;
+
+  // Send a fresh MMgrConfigure to all clients, so that they can follow
+  // the new policy for transmitting stats
+  finisher.queue(new FunctionContext([this](int r) {
+        // std::lock_guard l(lock);
+        Mutex::Locker l(lock);
+        for (auto &c : daemon_connections) {
+          if (c->peer_is_osd()) {
+            _send_configure(c);
+          }
+        }
+      }));
+}
+
 void DaemonServer::shutdown()
 {
   dout(10) << "begin" << dendl;
@@ -450,6 +470,10 @@ bool DaemonServer::handle_report(MMgrReport *m)
     ostringstream oss;
     oss << key.first << '.' << key.second;
     py_modules.notify_all("perf_schema_update", oss.str());
+  }
+
+  if (m->get_connection()->peer_is_osd()) {
+    osd_perf_metric_collector.process_reports(m->osd_perf_metric_reports);
   }
 
   m->put();
@@ -1490,6 +1514,30 @@ void DaemonServer::_send_configure(ConnectionRef c)
   auto configure = new MMgrConfigure();
   configure->stats_period = g_conf->get_val<int64_t>("mgr_stats_period");
   configure->stats_threshold = g_conf->get_val<int64_t>("mgr_stats_threshold");
+
+  if (c->peer_is_osd()) {
+    configure->osd_perf_metric_queries =
+        osd_perf_metric_collector.get_queries();
+  }
+
   c->send_message(configure);
 }
 
+OSDPerfMetricQueryID DaemonServer::add_osd_perf_query(
+    const OSDPerfMetricQuery &query,
+    const boost::optional<OSDPerfMetricLimit> &limit)
+{
+  return osd_perf_metric_collector.add_query(query, limit);
+}
+
+int DaemonServer::remove_osd_perf_query(OSDPerfMetricQueryID query_id)
+{
+  return osd_perf_metric_collector.remove_query(query_id);
+}
+
+int DaemonServer::get_osd_perf_counters(
+    OSDPerfMetricQueryID query_id,
+    std::map<OSDPerfMetricKey, PerformanceCounters> *counters)
+{
+  return osd_perf_metric_collector.get_counters(query_id, counters);
+}

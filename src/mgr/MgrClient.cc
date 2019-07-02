@@ -313,6 +313,10 @@ void MgrClient::send_report()
     daemon_dirty_status = false;
   }
 
+  if (get_perf_report_cb) {
+    get_perf_report_cb(&report->osd_perf_metric_reports);
+  }
+
   session->con->send_message(report);
 
   if (stats_period != 0) {
@@ -347,6 +351,10 @@ bool MgrClient::handle_mgr_configure(MMgrConfigure *m)
   if (stats_threshold != m->stats_threshold) {
     ldout(cct, 4) << "updated stats threshold: " << m->stats_threshold << dendl;
     stats_threshold = m->stats_threshold;
+  }
+
+  if (set_perf_queries_cb) {
+    set_perf_queries_cb(m->osd_perf_metric_queries);
   }
 
   bool starting = (stats_period == 0) && (m->stats_period != 0);
