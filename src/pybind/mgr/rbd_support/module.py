@@ -155,17 +155,21 @@ class Module(MgrModule):
         raw_pool_counters = query.setdefault(QUERY_RAW_POOL_COUNTERS, {})
         for query_id in query[QUERY_IDS]:
             res = self.get_osd_perf_counters(query_id)
+            self.log.error("res: {}".format(res))
             for counter in res['counters']:
                 # replace pool id from object name if it exists
                 k = counter['k']
                 pool_id = int(k[2][0]) if k[2][0] else int(k[0][0])
                 namespace = k[1][0]
                 image_id = k[2][1]
+                self.log.error("pool_id: {}, namespace: {}, image_id: {}".format(pool_id, namespace, image_id))
 
                 # ignore metrics from non-matching pools/namespaces
-                if pool_id not in pool_id_map:
-                    continue
+                # if pool_id not in pool_id_map:
+                #    self.log.error("pool_id: {} not in pool_id_map".format(pool_id))
+                #    continue
                 if pool_key[1] is not None and pool_key[1] != namespace:
+                    self.log.error("pool_key: {} is not valid".format(pool_key[1]))
                     continue
 
                 # flag the pool (and namespace) for refresh if we cannot find
@@ -187,7 +191,8 @@ class Module(MgrModule):
                 if not raw_image[0]:
                     raw_image[0] = [now_ts, [int(x[0]) for x in counter['c']]]
 
-        self.log.debug("merge_raw_osd_perf_counters: {}".format(raw_pool_counters))
+        # self.log.debug("merge_raw_osd_perf_counters: {}".format(raw_pool_counters))
+        self.log.error("merge_raw_osd_perf_counters: {}".format(raw_pool_counters))
         return raw_pool_counters
 
     def sum_osd_perf_counters(self, query, raw_pool_counters, now_ts):
@@ -217,7 +222,8 @@ class Module(MgrModule):
                     else:
                         sum_namespace[image_id] = [x for x in counters]
 
-        self.log.debug("sum_osd_perf_counters: {}".format(sum_pool_counters))
+        # self.log.debug("sum_osd_perf_counters: {}".format(sum_pool_counters))
+        self.log.error("sum_osd_perf_counters: {}".format(sum_pool_counters))
         return sum_pool_counters
 
     def refresh_image_names(self, resolve_image_names):
@@ -225,10 +231,13 @@ class Module(MgrModule):
         for pool_id, namespace in resolve_image_names:
             image_key = (pool_id, namespace)
             images = self.image_name_cache.setdefault(image_key, {})
-            with self.rados.open_ioctx2(int(pool_id)) as ioctx:
+            # with self.rados.open_ioctx2(int(pool_id)) as ioctx:
+            with self.rados.open_ioctx('tem') as ioctx:
                 ioctx.set_namespace(namespace)
-                for image_meta in rbd.list2(ioctx):
-                    images[image_meta['id']] = image_meta['name']
+                # for image_meta in rbd.list2(ioctx):
+                for image_meta in rbd.list(ioctx):
+                    # images[image_meta['id']] = image_meta['name']
+                    self.log.error("name: {}".format(image_meta))
             self.log.debug("resolve_image_names: {}={}".format(image_key, images))
 
     def scrub_missing_images(self):
@@ -270,12 +279,12 @@ class Module(MgrModule):
                 pool_key, query, now_ts, resolve_image_names)
             self.sum_osd_perf_counters(query, raw_pool_counters, now_ts)
 
-        if resolve_image_names:
-            self.image_name_refresh_time = now
-            self.refresh_image_names(resolve_image_names)
-            self.scrub_missing_images()
-        elif not self.image_name_cache:
-            self.scrub_missing_images()
+        # if resolve_image_names:
+            # self.image_name_refresh_time = now
+            # self.refresh_image_names(resolve_image_names)
+            # self.scrub_missing_images()
+        # elif not self.image_name_cache:
+            # self.scrub_missing_images()
 
     def get_rbd_pools(self):
         osd_map = self.get('osd_map')
@@ -397,14 +406,15 @@ class Module(MgrModule):
         pool_id_map = query[QUERY_POOL_ID_MAP]
         sum_pool_counters = query.setdefault(QUERY_SUM_POOL_COUNTERS, {})
         raw_pool_counters = query.setdefault(QUERY_RAW_POOL_COUNTERS, {})
+        self.log.error("pool_id_map: {}, sum_pool_counters: {}, raw_pool_counters: {}".format(pool_id_map, sum_pool_counters, raw_pool_counters))
 
         sort_by_index = OSD_PERF_QUERY_COUNTERS.index(sort_by)
 
         # pre-sort and limit the response
         results = []
         for pool_id, sum_namespaces in sum_pool_counters.items():
-            if pool_id not in pool_id_map:
-                continue
+            # if pool_id not in pool_id_map:
+            #     continue
             raw_namespaces = raw_pool_counters.get(pool_id, {})
             for namespace, sum_images in sum_namespaces.items():
                 raw_images = raw_namespaces.get(namespace, {})
@@ -416,18 +426,26 @@ class Module(MgrModule):
                                     self.extract_stat(sort_by_index, raw_image,
                                                       sum_image)])
         results = sorted(results, key=lambda x: x[1], reverse=True)[:REPORT_MAX_RESULTS]
+        self.log.error("results: {}".format(results))
 
         # build the report in sorted order
         pool_descriptors = {}
         counters = []
         for key, _ in results:
             pool_id = key[0]
-            pool_name = pool_id_map[pool_id]
+            self.log.error("pool_id: {}".format(pool_id))
+            # pool_name = pool_id_map[pool_id]
+            pool_name = 'mmm'
 
             namespace = key[1]
+            self.log.error("namespace: {}".format(namespace))
             image_id = key[2]
+            self.log.error("image_id: {}".format(image_id))
             image_names = self.image_name_cache.get((pool_id, namespace), {})
-            image_name = image_names[image_id]
+            self.log.error("image_names: {}".format(image_names))
+            # image_name = image_names[image_id]
+            image_name = "mmm"
+            self.log.error("image_name: {}".format(image_name))
 
             raw_namespaces = raw_pool_counters.get(pool_id, {})
             raw_images = raw_namespaces.get(namespace, {})
@@ -436,6 +454,7 @@ class Module(MgrModule):
             sum_namespaces = sum_pool_counters[pool_id]
             sum_images = sum_namespaces[namespace]
             sum_image = sum_images.get(image_id, [])
+            # sum_image = "mmm"
 
             pool_descriptor = pool_name
             if namespace:
@@ -448,6 +467,7 @@ class Module(MgrModule):
 
             # skip if no data to report
             if data == [0 for i in range(len(OSD_PERF_QUERY_COUNTERS))]:
+                self.log.error("no data")
                 continue
 
             counters.append({image_descriptor: data})
