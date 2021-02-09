@@ -8,6 +8,7 @@
 #include "MemDB.h"
 #ifdef HAVE_LIBROCKSDB
 #include "RocksDBStore.h"
+#include "IndigoDBStore.h"
 #endif
 #ifdef HAVE_KINETIC
 #include "KineticStore.h"
@@ -31,6 +32,9 @@ KeyValueDB *KeyValueDB::create(CephContext *cct, const string& type,
 #ifdef HAVE_LIBROCKSDB
   if (type == "rocksdb") {
     return new RocksDBStore(cct, dir, p);
+  }
+  if (type == "indigodb") {
+    return new IndigoDBStore(cct, dir, p);
   }
 #endif
 
