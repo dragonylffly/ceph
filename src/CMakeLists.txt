@@ -783,28 +783,28 @@ if(WITH_RBD)
   endif()
 endif(WITH_RBD)
 
-add_executable(ceph-dencoder ${dencoder_srcs})
-target_link_libraries(ceph-dencoder
-  global
-  os
-  osd
-  mds
-  mon
-  journal
-  ${DENCODER_EXTRALIBS}
-  cls_lock_client
-  cls_refcount_client
-  cls_log_client
-  cls_statelog_client
-  cls_version_client
-  cls_replica_log_client
-  cls_user_client
-  cls_journal_client
-  cls_timeindex_client
-  ${EXTRALIBS}
-  ${CMAKE_DL_LIBS}
-  )
-install(TARGETS ceph-dencoder DESTINATION bin)
+#add_executable(ceph-dencoder ${dencoder_srcs})
+#target_link_libraries(ceph-dencoder
+#  global
+#  os
+#  osd
+#  mds
+#  mon
+#  journal
+#  ${DENCODER_EXTRALIBS}
+#  cls_lock_client
+#  cls_refcount_client
+#  cls_log_client
+#  cls_statelog_client
+#  cls_version_client
+#  cls_replica_log_client
+#  cls_user_client
+#  cls_journal_client
+#  cls_timeindex_client
+#  ${EXTRALIBS}
+#  ${CMAKE_DL_LIBS}
+#  )
+#install(TARGETS ceph-dencoder DESTINATION bin)
 
 # Monitor
 add_subdirectory(mon)
